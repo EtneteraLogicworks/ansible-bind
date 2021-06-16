@@ -1,0 +1,94 @@
+---
+# Ansible role
+#
+# BIND DNS
+
+- name: Install packages
+  apt:
+    name:
+      - 'bind9'
+      - 'dnsutils'
+
+- name: Update root DNSSEC keys
+  environment: '{{ proxy_env | default({}) }}'
+  get_url:
+    url: '{{ bind.dnssec.keys_url }}'
+    dest: '/etc/bind/bind.keys'
+    force: true
+  notify: restart BIND
+
+- name: Generate config files
+  template:
+    dest: '/etc/bind/{{ item.name }}'
+    src: '{{ item.name }}.j2'
+    owner: 'root'
+    group: 'bind'
+    mode: '{{ item.mode | default("0644") }}'
+    validate: 'named-checkconf %s'
+  loop:
+    - name: 'keys.conf'
+      mode: '0640'
+    - name: 'named.conf.local'
+    - name: 'named.conf.options'
+  notify: restart BIND
+  tags:
+    - bind-config
+
+- name: Crate zones directory
+  file:
+    dest: '/etc/bind/zones'
+    state: 'directory'
+    owner: 'bind'
+    group: 'bind'
+    mode: '0750'
+  tags:
+    - bind-zones
+
+
+- name: Zone files
+  block:
+    - name: Create serial, based on UTC UNIX time
+      command: 'date -u +%s'
+      register: timestamp
+      changed_when: false
+      check_mode: false
+
+    - name: Read zone hashes
+      shell: >-
+        grep -s "^; Hash:" /etc/bind/zones/{{ zone.filename | default("db." + zone.name) }}
+      failed_when: false
+      changed_when: false
+      check_mode: false
+      register: zone_hashes_temp
+      when: zone.type == "master"
+      loop: '{{ bind.zones }}'
+      loop_control:
+        label: "{{ zone.name }}"
+        loop_var: 'zone'
+
+    - name: Create dict with zone hashes
+      set_fact:
+        zone_hashes: "{{ zone_hashes|default([]) + [ {'hash': item.stdout|default(), 'name': item.zone.name} ] }}"
+      loop: "{{ zone_hashes_temp.results | default([]) }}"
+      loop_control:
+        label: "{{ item.zone.name }}"
+
+    - name: Crate zone file
+      template:
+        dest: '/etc/bind/zones/{{ zone.filename | default("db." + zone.name) }}'
+        src: 'zone.j2'
+        owner: 'bind'
+        group: 'bind'
+        mode: '0640'
+        validate: 'named-checkzone -d {{ zone.name }} %s'
+      when: zone.type == "master"
+      loop: '{{ bind.zones }}'
+      loop_control:
+        label: "{{ zone.name }}"
+        loop_var: 'zone'
+      notify: reload BIND
+
+  tags:
+    - bind-zones
+
+...

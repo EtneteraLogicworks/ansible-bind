@@ -1,0 +1,65 @@
+{% for acl in bind.acls | default([]) %}
+acl "{{ acl.name }}" {
+{%   for ace in acl.aces | default([]) %}
+  {{ ace }};
+{%   endfor %}
+};
+{% endfor %}
+
+{% for zone in bind.zones %}
+zone "{{ zone.name }}" {
+  type {{ zone.type }};
+
+{% if zone.type == 'slave' %}
+  file "{{ zone.filename | default('db.' + zone.name) }}";
+  masters {
+{%   for master in zone.masters | default([]) %}
+    {{ master }} key {{ zone.tsig_key }};
+{%   endfor %}
+  };
+  masterfile-format text;
+{% endif %}
+
+{% if zone.type == 'master' %}
+  file "/etc/bind/zones/{{ zone.filename | default('db.' + zone.name) }}";
+  allow-update {
+{%   for updater in zone.updaters | default(['none']) %}
+    {{ updater }};
+{%   endfor %}
+  };
+{% endif %}
+
+  forwarders {
+{%   for forwarder in zone.forwarders | default([]) %}
+    {{ forwarder }};
+{%   endfor %}
+  };
+
+{% if zone.type == 'forward' %}
+  forward only;
+{% else %}
+  allow-query {
+{%   for ace in zone.acl | default(['any']) %}
+    {{ ace }};
+{%   endfor %}
+  };
+{% endif %}
+
+
+{% if zone.slaves | default(False) %}
+  allow-transfer {
+    key {{ zone.tsig_key }};
+  };
+  notify yes;
+  also-notify {
+{%   for slave in zone.slaves %}
+    {{ slave }} port 53 key {{ zone.tsig_key }};
+{%   endfor %}
+  };
+{% endif %}
+
+};
+{% endfor %}
+
+
+include "/etc/bind/keys.conf";

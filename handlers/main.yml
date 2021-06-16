@@ -1,0 +1,14 @@
+---
+# Ansible handlers
+
+- name: restart BIND
+  service:
+    name: 'bind9'
+    state: restarted
+
+- name: reload BIND
+  service:
+    name: 'bind9'
+    state: reloaded
+
+...

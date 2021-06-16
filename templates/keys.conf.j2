@@ -1,0 +1,7 @@
+{% for tsig_key in bind.tsig_keys %}
+key "{{ tsig_key.name }}" {
+	algorithm {{ tsig_key.algorithm | default("HMAC-SHA512") }};
+	secret "{{ tsig_key.secret }}";
+};
+
+{% endfor %}

@@ -1,0 +1,40 @@
+---
+# Ansible defaults file
+#
+# BIND role default variables
+
+bind:
+  forward:
+    enabled: true
+    servers:
+      - '8.8.8.8'
+      - '8.8.4.4'
+    policy: 'first'
+
+
+  recursion:
+    enabled: true
+    allowed_hosts:
+      - 'any'
+
+  acls: []
+  tsig_keys: []
+  zones: []
+  notify_source_v6: null
+
+  zone_default:
+    email: 'root@localhost'
+    refresh_period: 43200
+    retry_period: 180
+    expire_time: 1209600
+    negative_ttl: 1800
+    ttl: 28800
+
+  dnssec:
+    keys_url: 'https://downloads.isc.org/isc/bind9/keys/9.11/bind.keys.v9_11'
+    validation: 'auto'
+
+  max_cache_size: '100M'
+  custom_options: ''
+
+...

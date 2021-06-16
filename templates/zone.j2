@@ -1,0 +1,57 @@
+{#
+ # Serial number handling based on https://github.com/bertvv/ansible-role-bind
+ # First create a dict holding the entire zone information and create a hash
+ #  from it, that it can be compared with subsequent task executions. In this
+ #  way the serial will only be updated if there are some content changes.
+ #}
+{% set zone_ttl = zone.ttl | default(bind.zone_default.ttl) %}
+{% set zone_email = zone.email | default(bind.zone_default.email) %}
+{% set zone_refresh_period = zone.refresh_period | default(bind.zone_default.refresh_period) %}
+{% set zone_retry_period = zone.retry_period | default(bind.zone_default.retry_period) %}
+{% set zone_expire_time = zone.expire_time | default(bind.zone_default.expire_time) %}
+{% set zone_negative_ttl = zone.negative_ttl | default(bind.zone_default.negative_ttl) %}
+{% set _zone_data = {} %}
+{% set _ = _zone_data.update({'name': zone.name}) %}
+{% set _ = _zone_data.update({'nameserver': zone.nameserver}) %}
+{% set _ = _zone_data.update({'ttl': zone_ttl }) %}
+{% set _ = _zone_data.update({'email': zone_email}) %}
+{% set _ = _zone_data.update({'refresh_period': zone_refresh_period}) %}
+{% set _ = _zone_data.update({'retry_period': zone_retry_period}) %}
+{% set _ = _zone_data.update({'expire_time': zone_expire_time}) %}
+{% set _ = _zone_data.update({'negative_ttl': zone_negative_ttl}) %}
+{% set _ = _zone_data.update({'records': []}) %}
+{% for record in zone.records | default([]) %}
+{% set temp_record_label = record.label | default('') %}
+{% set temp_record_ttl = record.name | default('') %}
+{% set _ = _zone_data['records'].append([temp_record_label, temp_record_ttl, record.type, record.data]) %}
+{% endfor %}
+{#
+ #  Compare the zone file hash with the current zone data hash and set serial
+ #  accordingly
+ #}
+{% set _zone = {'hash': _zone_data | string | hash('md5')} %}
+{% for _result in zone_hashes if _result.name == zone.name %}
+{%   set _hash_serial = _result.hash.split(' ')[2:] %}
+{%   if _hash_serial and _hash_serial[0] == _zone['hash'] %}
+{%     set _ = _zone.update({'serial': _hash_serial[1]}) %}
+{%   else %}
+{%     set _ = _zone.update({'serial': timestamp.stdout}) %}
+{%   endif %}
+{% endfor %}
+; Hash: {{ _zone['hash'] }} {{ _zone['serial'] }}
+; Zone file for {{ zone.name }}
+; Managed by Ansible
+
+$ORIGIN {{ zone.name }}.
+$TTL {{ zone_ttl }}
+@ IN SOA {{ zone.nameserver }}. (
+  {{ zone_email }}
+  {{ _zone['serial'] }}
+  {{ zone_refresh_period }}
+  {{ zone_retry_period }}
+  {{ zone_expire_time }}
+  {{ zone_negative_ttl }}
+)
+{% for record in zone.records | default([]) %}
+{{ record.label | default('@') }} {{ record.ttl | default('') }} {{ record.type }} {{ record.data }}
+{% endfor %}

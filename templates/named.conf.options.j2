@@ -1,0 +1,24 @@
+options {
+    directory "/var/cache/bind";
+
+{% if bind.recursion.enabled %}
+    allow-recursion {
+        {{ bind.recursion.allowed_hosts | join('; ') }};
+    };
+{% endif %}
+{% if bind.forward.enabled %}
+    forwarders {
+        {{ bind.forward.servers | join('; ') }};
+    };
+    forward {{ bind.forward.policy }};
+{% endif %}
+
+    dnssec-validation {{ bind.dnssec.validation }};
+    listen-on-v6 { any; };
+{% if bind.notify_source_v6 %}
+    notify-source-v6 {{ bind.notify_source_v6 }};
+{% endif %}
+    version none;
+    max-cache-size {{ bind.max_cache_size }};
+    {{ bind.custom_options }}
+};
